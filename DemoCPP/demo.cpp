@@ -1296,15 +1296,41 @@ void DemoAngleBracketHack()
 #include <memory>
 #include <utility>
 
+/**
+ * @brief Estructura de prueba para verificar la categoría del valor (lvalue o rvalue).
+ * 
+ * Actúa como un sensor para confirmar si los argumentos han sido enviados
+ * correctamente preservando sus semánticas de movimiento o copia.
+ */
 struct AR
 {
+    /**
+     * @brief Constructor para rvalues (valores temporales).
+     * @param n Referencia a un rvalue de tipo entero.
+     */
     AR(int&& n) { std::cout << "rvalue overload, n=" << n << "\n"; }
+    /**
+     * @brief Constructor para lvalues (variables con nombre y ubicación en memoria).
+     * @param n Referencia a un lvalue de tipo entero.
+     */
     AR(int& n)  { std::cout << "lvalue overload, n=" << n << "\n"; }
 };
  
+/**
+ * @brief Clase que demuestra el reenvío perfecto con múltiples argumentos.
+ * 
+ * Instancia múltiples objetos de tipo AR reenviando los parámetros
+ * con su categoría de valor original utilizando std::forward.
+ */
 class BR
 {
 public:
+    /**
+     * @brief Constructor de plantilla para inicializar miembros mediante reenvío perfecto.
+     * 
+     * @tparam T1 Tipo del primer argumento (deducido como lvalue o rvalue reference).
+     * @param t1 Primer argumento a reenviar.
+     */
     template<class T1, class T2, class T3>
     BR(T1&& t1, T2&& t2, T3&& t3) :
         a1_{std::forward<T1>(t1)},
@@ -1313,19 +1339,47 @@ public:
     {
     }
 private:
-    AR a1_, a2_, a3_;
+    AR a1_, a2_, a3_; ///< Miembros internos que serán instanciados.
 };
- 
+
+/**
+ * @brief Función factoría simplificada para un solo argumento.
+ * 
+ * Crea un std::unique_ptr del tipo T, reenviando un único argumento al constructor de T.
+ * 
+ * @tparam T Tipo del objeto a construir dinámicamente.
+ * @tparam U Tipo del argumento a reenviar (Forwarding Reference).
+ * @param u El argumento que se pasará al constructor de T.
+ * @return std::unique_ptr<T> Puntero inteligente que gestiona el nuevo objeto.
+ */
 template<class T, class U>
 std::unique_ptr<T> make_unique1(U&& u)
 {   return std::unique_ptr<T>(new T(std::forward<U>(u)));
 }
- 
+
+/**
+ * @brief Función factoría variádica para múltiples argumentos.
+ * 
+ * Simula el comportamiento de std::make_unique. Acepta una cantidad variable
+ * de argumentos y los reenvía perfectamente al constructor de T.
+ * 
+ * @tparam T Tipo del objeto a construir dinámicamente.
+ * @tparam U Paquete de parámetros de plantilla (Parameter Pack) de los argumentos.
+ * @param u Paquete de argumentos (Forwarding References) a reenviar.
+ * @return std::unique_ptr<T> Puntero inteligente que gestiona el nuevo objeto.
+ */
 template<class T, class... U>
 std::unique_ptr<T> make_unique2(U&&... u)
 {   return std::unique_ptr<T>(new T(std::forward<U>(u)...));
 }
  
+
+/**
+ * @brief Función de demostración para evaluar el comportamiento del reenvío perfecto.
+ * 
+ * Instancia objetos utilizando las funciones factoría `make_unique1` y `make_unique2`,
+ * enviando una mezcla de lvalues y rvalues para verificar la salida por consola.
+ */
 void DemoMakeUnique()
 {   
     auto p1 = make_unique1<AR>(2); // rvalue
@@ -1337,39 +1391,84 @@ void DemoMakeUnique()
 }
 
 // From tmplbook/basics/arrays.cpp and arrays.hpp
+/**
+ * @brief Plantilla primaria que actúa como base para la inspección de tipos.
+ * * No está definida intencionalmente para forzar al compilador a utilizar 
+ * alguna de las especializaciones parciales proveídas a continuación.
+ * * @tparam T Tipo de dato base.
+ */
 template<typename T>
 struct MyClass;             // primary template
 
+/**
+ * @brief Especialización parcial para arreglos de límites conocidos (ej. int[5]).
+ * * @tparam T Tipo de los elementos del arreglo.
+ * @tparam SZ Tamaño del arreglo (cantidad de elementos).
+ */
 template<typename T, std::size_t SZ>
 struct MyClass<T[SZ]>       // partial specialization for arrays of known bounds
 {
   static void print() { std::cout << "print() for T[" << SZ << "]\n"; }
 };
 
+/**
+ * @brief Especialización parcial para referencias a arreglos de límites conocidos.
+ * * Previene la decadencia a punteros, preservando la información del tamaño.
+ * * @tparam T Tipo de los elementos del arreglo.
+ * @tparam SZ Tamaño del arreglo.
+ */
 template<typename T, std::size_t SZ>
 struct MyClass<T(&)[SZ]>    // partial spec. for references to arrays of known bounds
 {
     static void print() { std::cout << "print() for T(&)[" << SZ << "]\n"; }
 };
 
+/**
+ * @brief Especialización parcial para arreglos de límites desconocidos (ej. int[]).
+ * * @tparam T Tipo de los elementos del arreglo.
+ */
 template<typename T>
 struct MyClass<T[]>         // partial specialization for arrays of unknown bounds
 {
     static void print() { std::cout << "print() for T[]\n"; }
 };
 
+/**
+ * @brief Especialización parcial para referencias a arreglos de límites desconocidos.
+ * * @tparam T Tipo de los elementos del arreglo.
+ */
 template<typename T>
 struct MyClass<T(&)[]>      // partial spec. for references to arrays of unknown bounds
 {
     static void print() { std::cout << "print() for T(&)[]\n"; }
 };
 
+/**
+ * @brief Especialización parcial para punteros crudos.
+ * * Aquí es donde recaen los arreglos que han sufrido "Type Decay" al pasar por valor.
+ * * @tparam T Tipo al que apunta el puntero.
+ */
 template<typename T>
 struct MyClass<T*>          // partial specialization for pointers
 {
     static void print() { std::cout << "print() for T*\n"; }
 };
-
+/**
+ * @brief Función de prueba para demostrar la decadencia de tipos y deducción en plantillas.
+ * * Analiza las reglas de C++ al pasar arreglos. Muestra cómo los argumentos
+ * pasados por valor decaen a punteros, mientras que los pasados por referencia
+ * preservan su naturaleza de arreglos y sus límites (tamaño).
+ * * @tparam T1 Tipo deducido para argumento por valor.
+ * @tparam T2 Tipo deducido para lvalue reference.
+ * @tparam T3 Tipo deducido para forwarding reference.
+ * * @param a1 Arreglo de tamaño 7 (Por reglas del lenguaje, decae a int*).
+ * @param a2 Arreglo de tamaño desconocido (Decae a int*).
+ * @param a3 Referencia explícita a un arreglo de 42 elementos (Conserva el tipo).
+ * @param x0 Referencia a un arreglo de tamaño desconocido (Conserva el tipo).
+ * @param x1 Argumento por plantilla pasado por valor (Sufre decadencia de tipo).
+ * @param x2 Argumento por plantilla lvalue reference (Conserva el tipo original).
+ * @param x3 Argumento por plantilla de referencia universal (Conserva el tipo original).
+ */
 template<typename T1, typename T2, typename T3>
 void TestingParamsTypes(int a1[7], int a2[],    // pointers by language rules
          int (&a3)[42],          // reference to array of known bound
